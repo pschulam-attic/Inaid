@@ -10,40 +10,11 @@
 
 library(plyr)
 
-diff_mod <- 92
-
 restrict_df <- function(test_df, train_df) {
     female <- test_df$strFemale[1]
     race <- test_df$strRaceId1[1]
     smoke <- test_df$smoke[1]
     subset(train_df, strFemale == female & strRaceId1 == race & smoke == smoke)
-}
-
-compute_similarity <- function(test_df, train_df) {
-
-    patient_sim <- function(df) {
-        buckets <- test_df$bucket
-
-        ss <- 0
-        c <- 0
-
-        for (i in seq(nrow(test_df))) {
-            row <- test_df[i, ]
-            d <- subset(df, bucket == row$bucket)
-            if (nrow(d) == 0)
-                next
-            ss <- (row$fvc - mean(d$fvc)) ** 2
-            c <- c + 1
-        }
-
-        if (c == 0)
-            return(Inf)
-        else
-            return(ss / c)
-    }
-
-    train_df <- ddply(train_df, .(PtID), patient_sim)
-    arrange(train_df, V1)
 }
 
 patient_sim <- function(p1_df, p2_df) {
@@ -73,38 +44,80 @@ has_bucket <- function(df, b) {
     b %in% df$bucket
 }
 
-has_bucket <- function(df, b) {
-    ddply(df, .(PtID), summarize, hasbucket = any(b == bucket))$hasbucket
-}
-
 knn_predict <- function(test_df, train_df, k = 5) {
-    test <- transform(test_df, bucket = diff %/% diff_mod)
-    test <- arrange(test, diff)
+    test <- arrange(test_df, diff)
     test <- test[1:4, ]
 
     test_out <- test[5, ]
 
-    train <- transform(train_df, bucket = diff %/% diff_mod)
+    train <- train_df
 
-    sim <- compute_similarity(test, train)
-    sim <- sim[has_bucket(train, test_out$bucket), ]
-    sim <- sim[1:k, ]$PtID
+    similarity_to <- function(df) {
+        similarity <- patient_sim(test, df)
+        hasbucket <- has_bucket(df, test_out$bucket)
+        data.frame(similarity = similarity, hasbucket = hasbucket)
+    }
 
-    k_nearest <- subset(train, PtID %in% sim)
+    sim <- ddply(train, .(PtID), similarity_to)
+    sim <- subset(sim, hasbucket == TRUE)
+    sim <- arrange(sim, similarity)
+    sim[1:k, ]
 }
 
+read_data <- function(filename) {
+    data <- arrange(read.csv(filename), PtID, diff)
+    data <- subset(data, select = c(PtID, diff, fvc, strFemale, strRaceId1, smoke, age, aca))
 
+    data$PtID <- as.factor(data$PtID)
+    data$strFemale <- as.factor(data$strFemale)
+    data$strRaceId1 <- as.factor(data$strRaceId1)
+    data$smoke <- as.factor(data$smoke)
 
-data <- arrange(read.csv("train.csv"), PtID, diff)
-data <- subset(data, select = c(PtID, diff, fvc, strFemale, strRaceId1, ethnic, smoke, age))
-data <- transform(data, bucket = diff %/% diff_mod)
+    return(data)
+}
 
-data <- within(data, {
-    PtID <- as.factor(PtID)
-    strFemale <- as.factor(strFemale)
-    strRaceId1 <- as.factor(strRaceId1)
-    ethnic <- as.factor(ethnic)
-    smoke <- as.factor(smoke)
-})
+main <- function(bucket_size = 365) {
+    data <- read_data("train.csv")
+    data <- add_buckets(data, bucket_size)
 
+    
+}
 
+main <- function() {
+    bucket_size <- 365
+
+    data <- arrange(read.csv("train.csv"), PtID, diff)
+    data <- subset(data, select = c(PtID, diff, fvc, strFemale, strRaceId1, ethnic, smoke, age))
+    data <- add_buckets(data, bucket_size)
+
+    data <- within(data, {
+        PtID <- as.factor(PtID)
+        strFemale <- as.factor(strFemale)
+        strRaceId1 <- as.factor(strRaceId1)
+        ethnic <- as.factor(ethnic)
+        smoke <- as.factor(smoke)
+    })
+
+    patient_ids <- unique(data$PtID)
+
+    results <- data.frame()
+    k <- 5
+
+    i <- 0
+
+    for (pid in patient_ids) {
+        if (i > 5)
+            break
+
+        i <- i + 1
+        
+        message(sprintf("Predicting patient %s", pid))
+        test <- subset(data, PtID == pid)
+        train <- subset(data, PtID != pid)
+
+        r <- data.frame(knn_predict(test, train, k))
+        results <- rbind(results, r)
+    }
+
+    results
+}
