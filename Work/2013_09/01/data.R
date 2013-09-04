@@ -1,3 +1,4 @@
+library(lme4)
 library(plyr)
 
 read.data <- function(filename) {
@@ -19,4 +20,18 @@ prep.data <- function(data, bucket.size = 92, min.visits = 6) {
     pids <- subset(nvisits, n >= 6)$PtID
     
     subset(pdata, PtID %in% pids)
+}
+
+prep.normalized.data <- function(data, bucket.size = 92, min.visits = 6) {
+    pdata <- prep.data(data, bucket.size, min.visits)
+
+    mem.fit <- lmer(y ~ x + (1|PtID), data = pdata)@ranef
+    names(rand.effects) <- unique(pdata$PtID)
+
+    cpid <- function(pid) {
+        as.character(pid[1])
+    }
+
+    pdata <- ddply(pdata, .(PtID), transform, y = y - rand.effects[[cpid(PtID)]])
+    pdata
 }

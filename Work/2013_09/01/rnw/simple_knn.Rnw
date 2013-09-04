@@ -77,7 +77,7 @@ p + geom_boxplot(outlier.size = 0) +
     xlab("Quarter") + ylab("RSE")
 @
 
-\section{Future Directions}
+\section{Limitations}
 \label{sec:future-directions}
 
 To find trajectories similar to a given patient independent of the scale of the measurements, we can include a random effects term (similar to what is used in mixed effects models) to account for baseline variation between patients.
