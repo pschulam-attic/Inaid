@@ -1,0 +1,88 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\title{Simple K-NN FVC Prediction}
+\author{Peter Schulam}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+\label{sec:introduction}
+
+We evaluate a $k$ nearest neighbor approach for predicting disease trajectories.
+Specifically, we look at measurements taken on patients with scleroderma, a rare autoimmune disease that affects the lungs.
+The status of a patient is evaluated using forced vital capacity (FVC), which is an approximate measure of the health of the cardiovascular system.
+
+\section{KNN for Longitudinal Data}
+\label{sec:knn-for-longitudinal-data}
+
+To measure the similarity between any two patients, we use the average mean squared error between the measurements for each patient.
+Measurements for patients are taken at irregularly spaced intervals, and the number of measurements is not consistent across patients.
+To account for the inconsistent measurements, we work with quarter years (around 92 days) as the basic time unit.
+To create a consistent sequence of FVC measurements for each quarter, we first bucket all observed measurements for each patient into quarters since first visit (i.e. 0 for the first quarter, 1 for the second quarter, etc.)
+When multiple measurements are taken in a single quarter, the average is used as a single measurement.
+
+Many patients will not have observed measurments for particular quarters.
+In order to consistently estimate the similarity between patients, we approximate missing measurements using a linear interpolation between the last previously available measurement and the next available measurement.
+A comparison of imputation methods for missing data in longitudinal studies can be found in \cite{engels2003}.
+A similar approach to imputing missing longitudinal measurements for the purpose of clustering is presented in \cite{genolini2010}.
+
+<<libraries, echo=FALSE, message=FALSE>>=
+library(ggplot2)
+library(plyr)
+
+source("../data.R")
+source("../patient.R")
+source("../predict.R")
+@ 
+
+We first preprocess the data by bucketing the measurements into quarter years.
+All patients who were treated for fewer than 1.75 years were discarded.
+This step is to ensure that we can make at least one prediction for each patient in the data when using the first 6 quarters.
+
+<<data-import, cache=TRUE>>=
+data <- read.data("../train.csv")
+pdata <- prep.data(data, bucket.size = 92, min.visits = 6)
+@
+
+For prediction, we must be able to compute the distance between a query patient and a patient in our training set.
+Let $n_i$ be the last quarter at which patient $i$ was seen, then to determine the distance between patients $i$ and $j$ we compute
+
+\begin{align}
+  d(i, j) &= \frac{1}{\min(n_i, n_j)} \sum_{k=1}^{\min(n_i,n_j)} (y_{ik} - y_{jk})^2
+\end{align}
+
+For each patient, we predict all quarters after the sixth quarter and compute the root mean squared error.
+By running LOOCV, we can estimate the error at each quarter.
+
+<<predict, cache=TRUE>>=
+k <- 5
+pids <- array(unique(pdata$PtID))
+
+predict.patient <- function(pid) {
+    knn.predict(pid, pdata, k)
+}
+
+results <- adply(pids, 1, predict.patient)
+@
+
+<<results, fig.align="center", tidy=FALSE>>=
+errors <- transform(results, se = (y - p) ** 2)
+p <- ggplot(subset(errors, x < 21), aes(factor(x), sqrt(se)))
+p + geom_boxplot(outlier.size = 0) +
+    geom_jitter(alpha = 0.2) +
+    xlab("Quarter") + ylab("RSE")
+@
+
+\section{Future Directions}
+\label{sec:future-directions}
+
+To find trajectories similar to a given patient independent of the scale of the measurements, we can include a random effects term (similar to what is used in mixed effects models) to account for baseline variation between patients.
+
+\bibliographystyle{plain}
+\bibliography{../../../../Bibliography/inaid.bib}
+
+\end{document}
