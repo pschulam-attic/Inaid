@@ -1,7 +1,5 @@
 library(plyr)
 
-source("patient.R")
-
 read.data <- function(filename) {
     data <- arrange(read.csv(filename), PtID, diff)
     

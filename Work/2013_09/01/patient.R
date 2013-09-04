@@ -40,3 +40,17 @@ prep.patient.data <- function(df, bucket.size = 92) {
 
     data.frame(PtID = pid, x = int.x, y = int.y)
 }
+
+patient.dist <- function(df1, df2) {
+    pid1 <- df1$PtID[1]
+    pid2 <- df2$PtID[2]
+    
+    min.length <- min(length(df1$y), length(df2$y))
+    y1 <- df1$y[1:min.length]
+    y2 <- df2$y[1:min.length]
+
+    d <- (y1 - y2) ** 2
+    d <- mean(d)
+
+    data.frame(distance = d)
+}
