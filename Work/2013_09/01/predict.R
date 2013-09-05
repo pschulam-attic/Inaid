@@ -66,14 +66,10 @@ knn.mem.predict <- function(pid, data, k, n.observed = 6) {
     kn <- transform(kn, y = y - intercept)
 
     changes <- ddply(kn, .(x), summarize, change = mean(y))
-    predictions <- transform(changes, prediction = change + patient$intercept[1])
+    predictions <- transform(changes, p = change + patient$intercept[1])
 
     patient.new <- patient[(n.observed+1):nrow(patient), ]
     results <- merge(patient.new, predictions, by = "x")
 
     results
-}
-
-run <- function(pdata) {
-
 }

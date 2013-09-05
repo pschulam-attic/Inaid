@@ -74,8 +74,47 @@ errors <- transform(results, se = (y - p) ** 2)
 p <- ggplot(subset(errors, x < 21), aes(factor(x), sqrt(se)))
 p + geom_boxplot(outlier.size = 0) +
     geom_jitter(alpha = 0.2) +
-    xlab("Quarter") + ylab("RSE")
+    xlab("Quarter") + ylab("Absolute Error")
 @
+
+In addition to using the interpolated trajectories to compare two patients, we can also use the estimated coefficients of a mixed effects model.
+
+<<predict-mem, cache=TRUE>>=
+k <- 5
+pids <- array(unique(pdata$PtID))
+
+predict.patient <- function(pid) {
+    knn.mem.predict(pid, pdata, k)
+}
+
+results.mem <- adply(pids, 1, predict.patient)
+@ 
+
+Below, we show the boxplot of absolute errors for each quarter after the sixth quarter using this technique.
+
+<<results-mem, fig.align="center", tidy=FALSE>>=
+errors.mem <- transform(results.mem, se = (y - p) ** 2)
+p.mem <- ggplot(subset(errors.mem, x < 21), aes(factor(x), sqrt(se)))
+p + geom_boxplot(outlier.size = 0) + 
+    geom_jitter(alpha = 0.2) + 
+    xlab("Quarter") + ylab("Absolute Error")
+@ 
+
+The mean absolute errors for each quarter seem to be comparable for both methods, with the mixed effects technique performing slightly better.
+
+<<comparison, fig.align="center", tidy=FALSE>>=
+s1 <- ddply(errors, .(x), summarize, mae = mean(sqrt(se)))
+s1$method <- "interpolation"
+
+s2 <- ddply(errors.mem, .(x), summarize, mae = mean(sqrt(se)))
+s2$method <- "mixedeffects"
+
+summary <- rbind(s1, s2)
+summary$method <- as.factor(summary$method)
+
+p <- ggplot(summary, aes(x = x, y = mae, color = method))
+p + geom_point()
+@ 
 
 \section{Limitations}
 \label{sec:future-directions}
